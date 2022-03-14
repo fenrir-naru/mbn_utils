@@ -4,6 +4,7 @@ A mbn file is mainly used to regulate comminucation methods and frequency bands 
 If the file is changed and flashed into your phone by android `fastboot` command, you can control its behaviour at your own risk.
 This mbn_utils is intended to help modification of the file.
 It is noted that the method to install the modified mbn file into an unlocked device (**without root**) is an alternative to get **root**, open **diag** port and modify NV items by using **QPST**.
+In addition, this tool is inspired by [EfsTools](https://github.com/JohnBel/EfsTools).
 
 ## How to use
 1. Download this repository and install Ruby
