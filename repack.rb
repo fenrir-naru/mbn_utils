@@ -164,12 +164,12 @@ proc{
     items.each{|header, prop, content|
       case header[:type]
       when 1 # Nv
-        io.puts([header[:type], prop[:id],
+        io.puts([header[:type], header[:attributes], prop[:id],
             prop[:magic], 
             content.unpack("C*").collect{|v| "%02X"%[v]}.join(' ')].join(','))
       when 2, 4 # NvFile(2), File(4)
         files[prop[:fname]] ||= 0
-        io.puts([header[:type], prop[:fname],
+        io.puts([header[:type], header[:attributes], prop[:fname],
             prop[:magic], prop[:size_magic], (prop[:data_magic] || -1),
             content.size, files[prop[:fname]]].join(','))
         fname_dst = File::join(dir_extract, prop[:fname])
@@ -184,7 +184,7 @@ proc{
 # Combine phase
 items_new = open(fname_list, 'r').collect.with_index{|line, i|
   next nil if line =~ /^\s*(?:$|#)/ # accept empty line
-  type, location, *other = line.chomp.split(',')
+  type, attri, location, *other = line.chomp.split(',')
   type = Integer(type)
   prop, content = case type
   when 1 # Nv
@@ -211,13 +211,7 @@ items_new = open(fname_list, 'r').collect.with_index{|line, i|
   deparse(ITEM_HEADER, {
     :length => ITEM_HEADER.min_bytes + prop.length + content.length,
     :type => type,
-    :attributes => proc{
-      # monkey patch
-      next 25 if (type == 2 && location == "/sd/rat_acq_order")
-      next 80 if (content.length == 0)
-      next 57 if (1 == type) && [10, 256, 441, 946, 2954].include?(Integer(location))
-      25
-    }.call,
+    :attributes => (Integer(attri) rescue 25), # may require monkey patch
     :reserved => 0,
   }) + prop + content
 }.compact + [deparse(ITEM_HEADER + [

@@ -18,11 +18,11 @@ The leading field in a line indicates the item type; 1, 2, and 4 are NV, NV_FILE
 The other fields are summarized in the following table.
 You can not only modify the parsed items but also add or delete the items.
 If you add or delte files in the extracted directory, _items.txt_ should be updated manually.
-Especailly, do not forget to update the length located at the 6th filed of NV_FILE or FILE after a file item is modified.
-    | 1st field | type | 2nd | 3rd | 4th | 5th | 6th | 7th |
-    ----|----|----|----|----|----|----|----
-    | 1 | NV | index | magic | hex byte data separated by spaces | | | |
-    | 2 or 4 | NV_FILE or FILE | file_name stored in the extratced directory | magic1 | magic2 | magic3 | length in file | offset in file |
+Especially, do not forget to update the length located at the 7th filed of NV_FILE or FILE after a file item is modified.
+    | 1st field | type | 2nd | 3rd | 4th | 5th | 6th | 7th | 8th |
+    ----|----|----|----|----|----|----|----|----
+    | 1 | NV | attribute | index | magic | hex byte data separated by spaces | | | |
+    | 2 or 4 | NV_FILE or FILE | attribute | file_name stored in the extratced directory | magic1 | magic2 | magic3 | length in file | offset in file |
 1. (Optional) to understand the NV items in _items.txt_, you can use [nv_print.rb](nv_print.rb) to generate human freindly item list:
     ```
     ./nv_print.rb mcfg_sw.mbn.extracted/items.txt
