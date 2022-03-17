@@ -131,10 +131,10 @@ items = (mcfg_header[:items] - 1).times.collect{|i|
     prop.merge!(parse([
           [:size_magic, "v", 2],
           [:length_1, "v"], # length + 1
-          [:data_magic, "C"],
         ], mcfg_seg))
+    prop.merge!(parse([[:data_magic, "C"]], mcfg_seg)) if prop[:length_1] > 0
     #$stderr.puts "#{is_nv ? "ItemFile" : "File"}(%s, %d)"%[prop[:fname], prop[:length_1] - 1]
-    content = mcfg_seg.read(prop[:length_1] - 1)
+    content = (prop[:length_1] > 1) ? mcfg_seg.read(prop[:length_1] - 1) : "" 
   else
     raise "Unknown item: #{header}"
   end
@@ -170,7 +170,7 @@ proc{
       when 2, 4 # NvFile(2), File(4)
         files[prop[:fname]] ||= 0
         io.puts([header[:type], prop[:fname],
-            prop[:magic], prop[:size_magic], prop[:data_magic],
+            prop[:magic], prop[:size_magic], (prop[:data_magic] || -1),
             content.size, files[prop[:fname]]].join(','))
         fname_dst = File::join(dir_extract, prop[:fname])
         FileUtils.mkdir_p(File::dirname(fname_dst))
@@ -188,7 +188,7 @@ items_new = open(fname_list, 'r').collect.with_index{|line, i|
   type = Integer(type)
   prop, content = case type
   when 1 # Nv
-    content = other[1].split(/\s+/).collect{|str| str.to_i(16)}.pack("C*")
+    content = (other[1] || "").split(/\s+/).collect{|str| str.to_i(16)}.pack("C*")
     prop = [Integer(location), content.length + 1, Integer(other[0])].pack("vvC")
     [prop, content]
   when 2, 4 # NvFile(2), File(4)
@@ -197,14 +197,14 @@ items_new = open(fname_list, 'r').collect.with_index{|line, i|
     content = (0 == len_content) \
         ? "" \
         : open(File::join(dir_extract, location), 'rb').read[src_offset, len_content]
+    data_magic = Integer(other[2])
     prop = [
       Integer(other[0]), # magic
       location.length + 1, # fname_length
     ].pack("vv") + location + "\0" + [
       Integer(other[1]), # size_magic
-      content.length + 1, # length_1
-      Integer(other[2]), # data_magic
-    ].pack("vvC")
+      content.length + (data_magic < 0 ? 0 : 1), # length_1
+    ].pack("vv") + ((data_magic < 0) ? "" : [data_magic].pack("C"))
     [prop, content]
   end
   #$stderr.puts items[i][0..1].inspect if ![80, 25].include?(items[i][0][:attributes]) #|| (items[i][0][:type] == 1)
