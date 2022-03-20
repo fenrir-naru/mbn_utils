@@ -109,7 +109,7 @@ mcfg_seg = proc{|seg|
 mcfg_header = parse(MCFG_HEADER, mcfg_seg)
 $stderr.puts "MCFG: #{mcfg_header}"
 
-items = (mcfg_header[:items] - 1).times.collect{|i|
+items = mcfg_header[:items].times.collect{|i|
   header = parse(ITEM_HEADER, mcfg_seg)
   prop, content = [nil, nil]
   case header[:type]
@@ -134,24 +134,22 @@ items = (mcfg_header[:items] - 1).times.collect{|i|
         ], mcfg_seg))
     prop.merge!(parse([[:data_magic, "C"]], mcfg_seg)) if prop[:length_1] > 0
     #$stderr.puts "#{is_nv ? "ItemFile" : "File"}(%s, %d)"%[prop[:fname], prop[:length_1] - 1]
-    content = (prop[:length_1] > 1) ? mcfg_seg.read(prop[:length_1] - 1) : "" 
+    content = (prop[:length_1] > 1) ? mcfg_seg.read(prop[:length_1] - 1) : ""
+  when 10 # trailer
+    raise unless (i + 1 == mcfg_header[:items])
+    prop = parse([
+          [:magic, "v", 0xA1],
+          [:length_4, "v"], # length - 4 ?
+        ], mcfg_seg)
+    content = mcfg_seg.read(prop[:length_4] + 4)
+    raise unless content[0, 8] == "MCFG_TRL"
+    #$stderr.puts "trailer: #{prop}"
+    $stderr.puts "digest: #{content[79, 32].unpack('C*').collect{|i| "%02X"%[i]}.join(' ')}"
   else
     raise "Unknown item: #{header}"
   end
   [header, prop, content]
 }
-trailer = parse(ITEM_HEADER, mcfg_seg)
-raise unless trailer[:type] == 10
-trailer.merge!(parse([
-      [:magic2, "v", 0xA1],
-      [:data_length, "v"],
-    ], mcfg_seg))
-trailer.merge!(parse([
-      [:data, 
-        "C#{[trailer[:data_length], trailer[:length] - 12].max}", # TODO unknown tailer spec
-        "MCFG_TRL".unpack("C8")],
-    ], mcfg_seg))
-#$stderr.puts "trailer: #{trailer}"
 
 # Extraction phase
 dir_extract = "#{fname}.extracted"
@@ -176,6 +174,10 @@ proc{
         FileUtils.mkdir_p(File::dirname(fname_dst))
         File::open(fname_dst, 'ab'){|io2| io2 << content}
         files[prop[:fname]] += content.size
+      when 10 #trailer
+        io.puts([header[:type], header[:attributes], nil,
+            prop[:magic], prop[:length_4],
+            content.unpack("C*").collect{|v| "%02X"%[v]}.join(' ')].join(','))
       end
     }
   } unless File::exist?(fname_list)
@@ -206,19 +208,20 @@ items_new = open(fname_list, 'r').collect.with_index{|line, i|
       content.length + (data_magic < 0 ? 0 : 1), # length_1
     ].pack("vv") + ((data_magic < 0) ? "" : [data_magic].pack("C"))
     [prop, content]
+  when 10 # trailer
+    content = other[2].split(/\s+/).collect{|str| str.to_i(16)}.pack("C*")
+    prop = other[0..1].collect{|v| Integer(v)}.pack("vv")
+    [prop, content]
+  else
+    raise
   end
-  #$stderr.puts items[i][0..1].inspect if ![80, 25].include?(items[i][0][:attributes]) #|| (items[i][0][:type] == 1)
   deparse(ITEM_HEADER, {
     :length => ITEM_HEADER.min_bytes + prop.length + content.length,
     :type => type,
     :attributes => (Integer(attri) rescue 25), # may require monkey patch
     :reserved => 0,
   }) + prop + content
-}.compact + [deparse(ITEM_HEADER + [
-  [:magic2, "v"],
-  [:data_length, "v"],
-  [:data, "C*"],
-], trailer)]
+}.compact
 
 mcfg_seg_new = deparse(
     MCFG_HEADER, mcfg_header.merge({:items => items_new.length})) + items_new.join
@@ -233,7 +236,7 @@ proc{
           #$stderr.puts "different item size @ #{v[1]}:#{item_old}: old(#{len}) != new(#{len2})"
         end
         res + len
-      } + trailer[:length]
+      } #+ trailer[:length]
   $stderr.puts "main segment size: #{len_old} => #{mcfg_seg_new.length}"
 }.call
 proc{|rem_bytes| # alignment
